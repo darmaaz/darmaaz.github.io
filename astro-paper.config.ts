@@ -5,12 +5,12 @@ export default defineAstroPaperConfig({
     url: "https://darmaaz.github.io/",
     title: "darmaaz",
     description:
-      "Notes and projects on trajectory analysis, GPS reconstruction, and adjacent data-engineering work.",
+      "Long-form technical writeups on trajectory analysis, GPS reconstruction, ML systems, and whatever I'm building.",
     author: "darmaaz",
     profile: "https://github.com/darmaaz",
     ogImage: "default-og.jpg",
     lang: "en",
-    timezone: "America/New_York",
+    timezone: "America/Los_Angeles",
     dir: "ltr",
   },
   posts: {
@@ -30,10 +30,10 @@ export default defineAstroPaperConfig({
   },
   socials: [
     { name: "github", url: "https://github.com/darmaaz" },
+    { name: "linkedin", url: "https://linkedin.com/in/undarmaa-ganbaatar" },
     { name: "mail", url: "mailto:undarmm@gmail.com" },
     // Add when ready:
     // { name: "x",        url: "https://x.com/darmaaz" },
-    // { name: "linkedin", url: "https://www.linkedin.com/in/darmaaz/" },
   ],
   shareLinks: [
     { name: "x", url: "https://x.com/intent/post?url=" },

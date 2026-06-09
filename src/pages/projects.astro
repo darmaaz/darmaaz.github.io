@@ -57,10 +57,14 @@ const projects: Project[] = [
     tags: ["nextjs", "fastapi", "modal", "sam2", "ml", "saas"],
     links: [
       { label: "Live demo", href: "https://diecut-studio.vercel.app" },
+      {
+        label: "Writeup",
+        href: "/posts/serverless-gpu-cold-starts-memory-snapshots/",
+      },
       // Add the GitHub link if the repo goes public:
       // { label: "GitHub", href: "https://github.com/darmaaz/sticker-processor" },
     ],
-    note: "Demo is capped at 5 trial credits per visitor; the GPU backend cold-starts (~30s) after a week of inactivity.",
+    note: "Demo is capped at 5 trial credits per visitor; the GPU backend scales to zero, so the first request may cold-start (~11s once memory snapshots are primed — see the writeup).",
   },
   {
     title: "the lexicon",
