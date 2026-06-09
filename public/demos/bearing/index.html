@@ -1,0 +1,978 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>trajkit · bearing detector playground</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    :root {
+      --background: #f6fcf7;
+      --foreground: #060b07;
+      --accent: #027c6d;
+      --muted: #c9e4e2;
+      --muted-foreground: #6b7280;
+      --border: #d4e1df;
+      --orange: #d55e00;
+      --blue: #0072b2;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--background);
+      color: var(--foreground);
+      margin: 0;
+      padding: 24px;
+      max-width: 760px;
+      margin-inline: auto;
+      line-height: 1.5;
+    }
+    /* When embedded in an iframe inside another page, strip standalone-only
+       decoration: kill page padding, drop the outer details wrapper styling,
+       go transparent so the host's background shows through, and hide the
+       h1 / intro that only make sense standalone. */
+    body.embed {
+      background: transparent;
+      padding: 0;
+      max-width: none;
+    }
+    body.embed h1,
+    body.embed > p.help,
+    body.embed > details > summary { display: none; }
+    body.embed > details {
+      border: 0;
+      padding: 0;
+      background: transparent;
+      border-radius: 0;
+    }
+    details {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 18px;
+      background: white;
+    }
+    details > summary {
+      cursor: pointer;
+      font-weight: 600;
+      color: var(--accent);
+      list-style: none;
+      padding: 4px 0;
+    }
+    details > summary::before {
+      content: "▸ ";
+      display: inline-block;
+      transition: transform 120ms ease;
+    }
+    details[open] > summary::before {
+      transform: rotate(90deg);
+    }
+    .demo {
+      margin-top: 16px;
+    }
+    body.embed .demo { margin-top: 0; }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      margin-block: 12px;
+      font-size: 14px;
+    }
+    .controls button {
+      font: inherit;
+      padding: 6px 14px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: white;
+      cursor: pointer;
+      color: var(--foreground);
+    }
+    .controls button:hover { border-color: var(--accent); color: var(--accent); }
+    .controls button.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+    }
+    .controls button.primary:hover { opacity: 0.9; color: white; }
+    .controls label { display: inline-flex; gap: 6px; align-items: center; }
+    .controls select { font: inherit; padding: 4px 6px; }
+    .readouts {
+      display: flex;
+      gap: 24px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 13px;
+      color: var(--muted-foreground);
+      margin-block: 8px;
+    }
+    .readouts strong { color: var(--foreground); font-weight: 600; }
+    .canvas-wrap {
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px;
+      margin-block: 8px;
+    }
+    .legend {
+      display: flex;
+      gap: 18px;
+      font-size: 12px;
+      color: var(--muted-foreground);
+      margin-block: 6px;
+    }
+    .legend-dot {
+      display: inline-block;
+      width: 14px;
+      height: 2px;
+      vertical-align: middle;
+      margin-right: 4px;
+    }
+    h1 { font-size: 20px; margin-block: 0 8px; }
+    p.help { font-size: 13px; color: var(--muted-foreground); margin-block: 4px 0; }
+  </style>
+</head>
+<body>
+  <h1>trajkit · bearing detector playground</h1>
+  <p class="help">
+    Standalone scaffolding for the post's interactive "Try it yourself" section.
+    Three preset paths; play to watch R update at two window scales and splits
+    fire where the detector commits.
+  </p>
+
+  <details open>
+    <summary>Try it yourself</summary>
+    <div class="demo" id="root"></div>
+  </details>
+
+  <script>
+    // Embed-mode handoff: when this page is loaded inside an iframe on the
+    // host site, strip standalone decoration and tell the parent how tall
+    // the content actually is so it can size the iframe to fit (no internal
+    // scrolling, no fixed-height guess).
+    (function () {
+      const embedded = window.self !== window.top;
+      if (!embedded) return;
+      document.body.classList.add("embed");
+      const post = () => {
+        const h = Math.ceil(document.documentElement.scrollHeight);
+        try {
+          window.parent.postMessage({ type: "bearing-demo-resize", height: h }, "*");
+        } catch (e) { /* ignore cross-origin parent */ }
+      };
+      window.addEventListener("load", post);
+      new ResizeObserver(post).observe(document.documentElement);
+    })();
+  </script>
+
+  <script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef, useMemo } = React;
+
+// ── Algorithm primitives ────────────────────────────────────────────
+
+// Bearing in degrees [0, 360), measured clockwise from "north" (positive y).
+// Path coordinates use math convention (y up). Display flips y for SVG.
+function computeBearings(points) {
+  const out = [NaN];
+  for (let i = 1; i < points.length; i++) {
+    const dx = points[i].x - points[i - 1].x;
+    const dy = points[i].y - points[i - 1].y;
+    if (dx === 0 && dy === 0) {
+      out.push(NaN);
+      continue;
+    }
+    let deg = (Math.atan2(dx, dy) * 180) / Math.PI;
+    if (deg < 0) deg += 360;
+    out.push(deg);
+  }
+  return out;
+}
+
+function computeCumDist(points) {
+  const out = [0];
+  for (let i = 1; i < points.length; i++) {
+    const dx = points[i].x - points[i - 1].x;
+    const dy = points[i].y - points[i - 1].y;
+    out.push(out[i - 1] + Math.sqrt(dx * dx + dy * dy));
+  }
+  return out;
+}
+
+function meanResultantLength(bearings) {
+  let sumCos = 0, sumSin = 0, n = 0;
+  for (const b of bearings) {
+    if (isNaN(b)) continue;
+    const rad = (b * Math.PI) / 180;
+    sumCos += Math.cos(rad);
+    sumSin += Math.sin(rad);
+    n += 1;
+  }
+  if (n === 0) return NaN;
+  return Math.sqrt((sumCos / n) ** 2 + (sumSin / n) ** 2);
+}
+
+function windowedR(cumDist, bearings, centerDist, windowM, minPings = 2) {
+  const half = windowM / 2;
+  const inWindow = [];
+  for (let i = 0; i < cumDist.length; i++) {
+    if (cumDist[i] >= centerDist - half && cumDist[i] <= centerDist + half) {
+      if (!isNaN(bearings[i])) inWindow.push(bearings[i]);
+    }
+  }
+  if (inWindow.length < minPings) return NaN;
+  return meanResultantLength(inWindow);
+}
+
+function precomputeR(cumDist, bearings, windowM) {
+  return cumDist.map(d => windowedR(cumDist, bearings, d, windowM));
+}
+
+// Mirror of trajkit._distance_hysteresis. State `true` = direction-changing.
+// Returns per-index state (so the path can be coloured by it), plus the
+// distance values where state transitions happen. Entries are the "split fires"
+// instants (what trajkit creates a new segment at); exits are the "direction
+// stable again" instants, which trajkit does NOT use as a new-segment boundary
+// — but are surfaced here so the reader can see the asymmetry.
+function computeStateAndSplits(cumDist, rShort, rLong, rEnter, rExit, sustainM) {
+  const states = new Array(cumDist.length).fill(false);
+  const entries = [];
+  const exits = [];
+  let state = false;
+  let pending = 0;
+  for (let i = 1; i < cumDist.length; i++) {
+    const dx = Math.max(cumDist[i] - cumDist[i - 1], 0);
+    const sh = isNaN(rShort[i]) ? 1 : rShort[i];
+    const lh = isNaN(rLong[i]) ? 1 : rLong[i];
+    const sl = isNaN(rShort[i]) ? 0 : rShort[i];
+    const ll = isNaN(rLong[i]) ? 0 : rLong[i];
+    const enterSig = sh < rEnter || lh < rEnter;
+    const exitSig = sl > rExit && ll > rExit;
+    if (state) {
+      if (exitSig) {
+        pending += dx;
+        if (pending >= sustainM) {
+          state = false;
+          pending = 0;
+          exits.push(cumDist[i]);
+        }
+      } else {
+        pending = 0;
+      }
+    } else {
+      if (enterSig) {
+        pending += dx;
+        if (pending >= sustainM) {
+          state = true;
+          pending = 0;
+          entries.push(cumDist[i]);
+        }
+      } else {
+        pending = 0;
+      }
+    }
+    states[i] = state;
+  }
+  return { states, entries, exits };
+}
+
+// ── Preset path generators (deterministic) ──────────────────────────
+
+// Tiny seeded PRNG so the same preset renders the same way every time.
+function mulberry32(seed) {
+  return function () {
+    let t = (seed += 0x6d2b79f5);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function generateStraight() {
+  const rng = mulberry32(7);
+  const pts = [];
+  let y = 0;
+  const stepM = 2;
+  const jitter = 0.4;
+  for (let i = 0; i < 120; i++) {
+    pts.push({ x: (rng() - 0.5) * jitter, y });
+    y += stepM;
+  }
+  return pts;
+}
+
+function generateRightAngle() {
+  const rng = mulberry32(13);
+  const pts = [];
+  let x = 0, y = 0;
+  const stepM = 2;
+  const noise = 0.25;
+  for (let i = 0; i < 60; i++) {
+    pts.push({ x, y: y + (rng() - 0.5) * noise });
+    x += stepM;
+  }
+  for (let i = 0; i < 60; i++) {
+    y += stepM;
+    pts.push({ x: x + (rng() - 0.5) * noise, y });
+  }
+  return pts;
+}
+
+// Helper: build a path from a sequence of legs. Each leg is either:
+//   { type: 'straight', bearingDeg, lengthM }
+//   { type: 'arc', sweepDeg, radius, turnRight }   // bearing inherited from prior leg
+// 'arc' rotates the bearing continuously over `sweepDeg` of turn, with given
+// turn radius. `turnRight: true` = clockwise (bearing increases).
+function pathFromLegs(legs, rngSeed, stepM = 2, noise = 0.25) {
+  const rng = mulberry32(rngSeed);
+  const pts = [{ x: 0, y: 0 }];
+  let curBearingDeg = 0;
+  for (const leg of legs) {
+    if (leg.type === 'straight') {
+      curBearingDeg = leg.bearingDeg;
+      const n = Math.floor(leg.lengthM / stepM);
+      const swerveA = leg.swerveAmplitudeDeg || 0;
+      const swerveW = leg.swerveWavelengthM || 100;
+      for (let i = 0; i < n; i++) {
+        const distAlong = i * stepM;
+        const swerveDeg = swerveA > 0
+          ? Math.sin((distAlong / swerveW) * 2 * Math.PI) * swerveA
+          : 0;
+        const actualRad = ((curBearingDeg + swerveDeg) * Math.PI) / 180;
+        const dx = Math.sin(actualRad) * stepM;
+        const dy = Math.cos(actualRad) * stepM;
+        const last = pts[pts.length - 1];
+        pts.push({
+          x: last.x + dx + (rng() - 0.5) * noise,
+          y: last.y + dy + (rng() - 0.5) * noise,
+        });
+      }
+    } else if (leg.type === 'arc') {
+      const last = pts[pts.length - 1];
+      // Perpendicular direction to current heading; sign by turn direction.
+      const perpDeg = curBearingDeg + (leg.turnRight ? 90 : -90);
+      const perpRad = (perpDeg * Math.PI) / 180;
+      const cx = last.x + leg.radius * Math.sin(perpRad);
+      const cy = last.y + leg.radius * Math.cos(perpRad);
+      const startAng = Math.atan2(last.x - cx, last.y - cy);
+      const sweepRad = (leg.sweepDeg * Math.PI) / 180;
+      const arcLength = sweepRad * leg.radius;
+      const nSteps = Math.max(2, Math.floor(arcLength / stepM));
+      const angleSign = leg.turnRight ? 1 : -1;
+      for (let i = 1; i <= nSteps; i++) {
+        const t = i / nSteps;
+        const ang = startAng + angleSign * t * sweepRad;
+        pts.push({
+          x: cx + leg.radius * Math.sin(ang) + (rng() - 0.5) * noise,
+          y: cy + leg.radius * Math.cos(ang) + (rng() - 0.5) * noise,
+        });
+      }
+      curBearingDeg += leg.turnRight ? leg.sweepDeg : -leg.sweepDeg;
+      curBearingDeg = ((curBearingDeg % 360) + 360) % 360;
+    }
+  }
+  return pts;
+}
+
+// Convenience for the older "all straight" presets that pre-date the arc support.
+function pathFromSegments(segments, rngSeed, stepM = 2, noise = 0.25) {
+  return pathFromLegs(
+    segments.map(s => ({ type: 'straight', bearingDeg: s.bearingDeg, lengthM: s.lengthM })),
+    rngSeed,
+    stepM,
+    noise
+  );
+}
+
+function generateWideRoute() {
+  // Two right-angle turns with legs long enough (280m) for R(200m) to recover
+  // above 0.92 between them. Each turn fires its own entry; between turns, the
+  // state cycles back to "going straight."
+  return pathFromSegments(
+    [
+      { bearingDeg: 0, lengthM: 280 },
+      { bearingDeg: 90, lengthM: 280 },
+      { bearingDeg: 0, lengthM: 280 },
+    ],
+    27
+  );
+}
+
+function generateCrossTown() {
+  // Five turns with short legs (50–90m) — well below the 200m long-window
+  // length. Once the state enters "direction-changing" at the first corner it
+  // never sees enough clean straight for R(200m) to recover, so no exit fires
+  // and only one entry is recorded for the whole zig-zag.
+  return pathFromSegments(
+    [
+      { bearingDeg: 0, lengthM: 90 },
+      { bearingDeg: 90, lengthM: 70 },
+      { bearingDeg: 0, lengthM: 60 },
+      { bearingDeg: 270, lengthM: 70 },
+      { bearingDeg: 0, lengthM: 80 },
+      { bearingDeg: 90, lengthM: 50 },
+    ],
+    21
+  );
+}
+
+function generateLongZigzag() {
+  // Same shape as the tight cross-town zig-zag but at 4× scale. Legs are
+  // 280–400m each, comfortably above the ~230m R(200m)-recovery threshold,
+  // so every corner fires its own entry and exit.
+  return pathFromSegments(
+    [
+      { bearingDeg: 0,   lengthM: 360 },
+      { bearingDeg: 90,  lengthM: 280 },
+      { bearingDeg: 0,   lengthM: 240 },
+      { bearingDeg: 270, lengthM: 280 },
+      { bearingDeg: 0,   lengthM: 320 },
+      { bearingDeg: 90,  lengthM: 240 },
+    ],
+    41
+  );
+}
+
+function generateHighwayCurve() {
+  // A wide sustained curve: 250m radius arc covering 90° of direction change.
+  // The 75m window during the arc spans only ~17° of bearings (R ≈ 0.99), so
+  // no entry fires — the algorithm treats the curve as one continuous segment.
+  return pathFromLegs(
+    [
+      { type: 'straight', bearingDeg: 0, lengthM: 220 },
+      { type: 'arc', sweepDeg: 90, radius: 250, turnRight: true },
+      { type: 'straight', bearingDeg: 90, lengthM: 220 },
+    ],
+    43
+  );
+}
+
+function generateUTurn() {
+  // 180° reversal over a tight 30m radius arc (~94m of arc length). The 75m
+  // window during the arc spans 143° of bearings (R ≈ 0.45) so entry fires
+  // confidently. The 200m exit straight is enough for R(200m) to recover.
+  return pathFromLegs(
+    [
+      { type: 'straight', bearingDeg: 0, lengthM: 220 },
+      { type: 'arc', sweepDeg: 180, radius: 30, turnRight: true },
+      { type: 'straight', bearingDeg: 180, lengthM: 240 },
+    ],
+    47
+  );
+}
+
+function generateRoundabout() {
+  // 3/4 traversal (270° sweep) of a small 15m-radius circle. Net direction
+  // change at the exit is 270° (effectively a left turn at the intersection).
+  // Arc length is only ~71m, but bearings inside it sweep across 270° — R(75m)
+  // collapses to near zero, the entry fires sharply, and the state stays in
+  // direction-changing until the 200m window fully clears the roundabout
+  // (so the exit fires ~200m past the roundabout end).
+  return pathFromLegs(
+    [
+      { type: 'straight', bearingDeg: 0, lengthM: 180 },
+      { type: 'arc', sweepDeg: 270, radius: 15, turnRight: true },
+      { type: 'straight', bearingDeg: 270, lengthM: 240 },
+    ],
+    53
+  );
+}
+
+function generateWanderingWalk() {
+  // A 600m walk generally heading north, but with ±25° bearing swerve over
+  // a 100m wavelength. R(75m) hovers around 0.95 throughout — comfortably
+  // above the 0.92 exit threshold and well above the 0.80 entry threshold —
+  // so the algorithm treats the whole thing as one segment. Demonstrates the
+  // algorithm's tolerance for realistic wobble.
+  return pathFromLegs(
+    [
+      {
+        type: 'straight', bearingDeg: 0, lengthM: 600,
+        swerveAmplitudeDeg: 25, swerveWavelengthM: 100,
+      },
+    ],
+    61
+  );
+}
+
+function generateRoundaboutSwervyExit() {
+  // Same roundabout as the clean version, but the exit straight wobbles at
+  // ±45° amplitude. That keeps R(200m) below 0.92 indefinitely, so even
+  // though the entity is generally heading west, the state never returns to
+  // "going straight" — the segment that started at the roundabout entry
+  // continues to the end of the trace.
+  return pathFromLegs(
+    [
+      { type: 'straight', bearingDeg: 0, lengthM: 180 },
+      { type: 'arc', sweepDeg: 270, radius: 15, turnRight: true },
+      {
+        type: 'straight', bearingDeg: 270, lengthM: 320,
+        swerveAmplitudeDeg: 45, swerveWavelengthM: 90,
+      },
+    ],
+    67
+  );
+}
+
+const PRESETS = {
+  straight:       { label: "Straight + jitter",            make: generateStraight,             hint: "noise around a fixed heading — no entries, no exits" },
+  wandering:      { label: "Wandering walk (±25° swerve)", make: generateWanderingWalk,        hint: "generally heading north but the bearing swerves ±25° — R(75m) stays around 0.95, comfortably above both thresholds, so the algorithm treats the whole thing as one segment" },
+  rightAngle:     { label: "Right-angle turn",             make: generateRightAngle,           hint: "one sustained turn — one entry, one exit once R(200m) recovers" },
+  wideRoute:      { label: "Two-turn route (wide blocks)", make: generateWideRoute,            hint: "two 90° turns with 280m legs — each corner gets its own entry and exit" },
+  highwayCurve:   { label: "Highway curve (wide)",         make: generateHighwayCurve,         hint: "a 250m-radius sustained curve — bearings change too gradually for R(75m) to dip below 0.80, so no entry fires; the whole curve stays one segment" },
+  uTurn:          { label: "U-turn (180° reversal)",       make: generateUTurn,                hint: "a tight 30m-radius U-turn — entry fires confidently; clean 200m exit straight lets R(200m) recover" },
+  roundabout:     { label: "Roundabout (clean exit)",      make: generateRoundabout,           hint: "270° around a 15m-radius circle followed by a clean straight exit — entry fires sharply at the roundabout, exit recovers ~200m past it" },
+  roundaboutSwer: { label: "Roundabout + swervy exit",     make: generateRoundaboutSwervyExit, hint: "same roundabout but the exit wobbles at ±45° — R(200m) hovers around 0.85, below the 0.92 exit threshold, so the state never returns to 'going straight' even though the entity is generally heading west" },
+  longZigzag:     { label: "Zig-zag (wide blocks)",        make: generateLongZigzag,           hint: "same shape as the tight zig-zag, 4× scale — each turn now gets its own entry and exit" },
+  crossTown:      { label: "Zig-zag (tight blocks)",       make: generateCrossTown,            hint: "5 turns at 50–90m apart — state enters direction-changing at the first corner and stays there to the end because R(200m) never recovers" },
+};
+
+// ── Visual constants ────────────────────────────────────────────────
+
+const PARAMS = {
+  shortM: 75,
+  longM: 200,
+  rEnter: 0.8,
+  rExit: 0.92,
+  sustainM: 30,
+};
+
+const COLORS = {
+  futurePath: "#dde2e0",     // very light grey — unwalked path
+  windowStroke: "#027c6d",   // teal — sliding window highlight
+  entry: "#d55e00",          // orange — entry / new segment boundary
+  exit: "#1a8754",           // green — state returns to going-straight (not a segment boundary)
+  marker: "#060b07",         // black — playback head
+  rShort: "#027c6d",         // teal
+  rLong: "#0072b2",          // blue
+  threshold: "#9aa8a5",      // grey
+  stateStraight: "#dde2e0",  // very light grey — state strip "going straight"
+  stateTurning: "#f3c690",   // light tan — state strip "direction changing"
+};
+
+// Distinct colours per segment. Cycle if there are more than 4.
+const SEGMENT_PALETTE = [
+  "#0072b2", // blue
+  "#b83280", // magenta
+  "#027c6d", // teal
+  "#7d5ba6", // purple
+];
+
+// ── Path canvas ─────────────────────────────────────────────────────
+
+function PathCanvas({ points, currentIdx, segmentIds, states, entries, exits, cumDist, windowM }) {
+  // Compute bounding box and fit to viewBox 0..600 × 0..360 with padding.
+  const W = 600, H = 360, PAD = 24;
+  const xs = points.map(p => p.x);
+  const ys = points.map(p => p.y);
+  const xmin = Math.min(...xs), xmax = Math.max(...xs);
+  const ymin = Math.min(...ys), ymax = Math.max(...ys);
+  const xrange = Math.max(xmax - xmin, 1);
+  const yrange = Math.max(ymax - ymin, 1);
+  const scale = Math.min((W - 2 * PAD) / xrange, (H - 2 * PAD) / yrange);
+  const ox = PAD + ((W - 2 * PAD) - xrange * scale) / 2;
+  const oy = PAD + ((H - 2 * PAD) - yrange * scale) / 2;
+  const project = p => ({
+    x: ox + (p.x - xmin) * scale,
+    y: H - (oy + (p.y - ymin) * scale), // flip y so up = north
+  });
+
+  // Sliding window indices (those whose cumDist is within ±half of current)
+  const cur = cumDist[currentIdx];
+  const half = windowM / 2;
+  const inWindow = new Set();
+  for (let i = 0; i < cumDist.length; i++) {
+    if (cumDist[i] >= cur - half && cumDist[i] <= cur + half) inWindow.add(i);
+  }
+
+  // Build per-segment path runs so each can be coloured by segment ID (a new
+  // segment starts on each `entry`). A "run" here is a maximal range of points
+  // that share the same segmentId.
+  const segmentRuns = [];
+  let curStart = 0;
+  for (let i = 1; i <= currentIdx; i++) {
+    if (segmentIds[i] !== segmentIds[curStart]) {
+      segmentRuns.push({ start: curStart, end: i, segId: segmentIds[curStart] });
+      curStart = i;
+    }
+  }
+  if (currentIdx > 0) {
+    segmentRuns.push({ start: curStart, end: currentIdx, segId: segmentIds[curStart] });
+  }
+  // Faint "future" path from currentIdx to end (so the reader sees where it's going)
+  const futurePathD = points
+    .slice(currentIdx)
+    .map((p, k) => {
+      const q = project(p);
+      return (k === 0 ? "M" : "L") + q.x.toFixed(1) + " " + q.y.toFixed(1);
+    })
+    .join(" ");
+
+  function runPathD(start, end) {
+    let d = "";
+    for (let i = start; i <= end; i++) {
+      const q = project(points[i]);
+      d += (i === start ? "M" : "L") + q.x.toFixed(1) + " " + q.y.toFixed(1) + " ";
+    }
+    return d;
+  }
+
+  // Find midpoint position of each segment (so far) for placing the seg label.
+  const segLabels = [];
+  {
+    const totalSegs = segmentIds[currentIdx] + 1;
+    for (let s = 0; s < totalSegs; s++) {
+      let first = -1, last = -1;
+      for (let i = 0; i <= currentIdx; i++) {
+        if (segmentIds[i] === s) {
+          if (first === -1) first = i;
+          last = i;
+        }
+      }
+      if (first >= 0) {
+        const midIdx = Math.floor((first + last) / 2);
+        const p = project(points[midIdx]);
+        segLabels.push({ segId: s, x: p.x, y: p.y });
+      }
+    }
+  }
+
+  // Window-highlight subpath
+  const windowIdxs = [...inWindow].sort((a, b) => a - b);
+  let windowPath = "";
+  for (let k = 0; k < windowIdxs.length; k++) {
+    const i = windowIdxs[k];
+    const q = project(points[i]);
+    windowPath += (k === 0 ? "M" : "L") + q.x.toFixed(1) + " " + q.y.toFixed(1) + " ";
+  }
+
+  function projectAt(distVal) {
+    let j = 0;
+    for (let i = 0; i < cumDist.length; i++) {
+      if (cumDist[i] >= distVal) { j = i; break; }
+    }
+    return project(points[j]);
+  }
+
+  const headProj = project(points[currentIdx]);
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block" }}>
+      {/* Future path (faint, so the reader sees where the playback is heading) */}
+      {futurePathD && (
+        <path d={futurePathD} fill="none" stroke={COLORS.futurePath} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      )}
+      {/* Walked path coloured per segment ID */}
+      {segmentRuns.map((run, k) => (
+        <path
+          key={k}
+          d={runPathD(run.start, run.end)}
+          fill="none"
+          stroke={SEGMENT_PALETTE[run.segId % SEGMENT_PALETTE.length]}
+          strokeWidth="3.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      ))}
+      {/* Segment labels at midpoint of each walked segment */}
+      {segLabels.map(lbl => (
+        <g key={`lbl${lbl.segId}`}>
+          <circle cx={lbl.x} cy={lbl.y} r="11" fill="white" stroke={SEGMENT_PALETTE[lbl.segId % SEGMENT_PALETTE.length]} strokeWidth="1.5" />
+          <text x={lbl.x} y={lbl.y + 4} fontSize="11" fontWeight="600" textAnchor="middle" fill={SEGMENT_PALETTE[lbl.segId % SEGMENT_PALETTE.length]}>
+            {lbl.segId + 1}
+          </text>
+        </g>
+      ))}
+      {/* Sliding window highlight */}
+      {windowPath && (
+        <path d={windowPath} fill="none" stroke={COLORS.windowStroke} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.85" />
+      )}
+      {/* Entry markers (splits) */}
+      {entries.filter(d => d <= cur).map((d, i) => {
+        const p = projectAt(d);
+        return (
+          <g key={`e${i}`}>
+            <circle cx={p.x} cy={p.y} r="9" fill="none" stroke={COLORS.entry} strokeWidth="2" />
+            <circle cx={p.x} cy={p.y} r="3" fill={COLORS.entry} />
+          </g>
+        );
+      })}
+      {/* Exit markers (state returns to going-straight) */}
+      {exits.filter(d => d <= cur).map((d, i) => {
+        const p = projectAt(d);
+        return (
+          <g key={`x${i}`}>
+            <circle cx={p.x} cy={p.y} r="9" fill="none" stroke={COLORS.exit} strokeWidth="2" strokeDasharray="2 2" />
+            <circle cx={p.x} cy={p.y} r="3" fill={COLORS.exit} />
+          </g>
+        );
+      })}
+      {/* Playback head */}
+      {currentIdx > 0 && (
+        <circle cx={headProj.x} cy={headProj.y} r="6" fill={COLORS.marker} stroke="white" strokeWidth="2" />
+      )}
+    </svg>
+  );
+}
+
+// ── State strip (thin band showing the state machine over distance) ─
+
+function StateStrip({ cumDist, states, currentIdx, entries, exits }) {
+  const W = 600, H = 22, PAD_L = 36, PAD_R = 12;
+  const total = cumDist[cumDist.length - 1];
+  const xScale = d => PAD_L + (d / total) * (W - PAD_L - PAD_R);
+  // Group consecutive indices by state, draw a rect per run
+  const runs = [];
+  let curStart = 0;
+  for (let i = 1; i < cumDist.length; i++) {
+    if (states[i] !== states[curStart]) {
+      runs.push({ start: cumDist[curStart], end: cumDist[i], state: states[curStart] });
+      curStart = i;
+    }
+  }
+  runs.push({ start: cumDist[curStart], end: cumDist[cumDist.length - 1], state: states[curStart] });
+  const cur = cumDist[currentIdx];
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: 22, display: "block" }}>
+      <text x={4} y={15} fontSize="11" fill={COLORS.threshold}>state</text>
+      {runs.map((r, k) => {
+        const x1 = xScale(r.start);
+        const x2 = xScale(Math.min(r.end, cur));
+        if (x2 <= x1) return null;
+        return (
+          <rect key={k} x={x1} y={4} width={x2 - x1} height={14}
+            fill={r.state ? COLORS.stateTurning : COLORS.stateStraight} />
+        );
+      })}
+      {/* Future strip (faint outline only) */}
+      <rect x={xScale(cur)} y={4} width={Math.max(0, xScale(total) - xScale(cur))} height={14}
+        fill="none" stroke={COLORS.futurePath} strokeWidth="1" />
+      {/* Playback marker */}
+      <line x1={xScale(cur)} x2={xScale(cur)} y1={2} y2={20} stroke={COLORS.marker} strokeWidth="1.5" />
+    </svg>
+  );
+}
+
+// ── R-over-distance canvas ──────────────────────────────────────────
+
+function RCurveCanvas({ cumDist, rShort, rLong, currentIdx, entries, exits, rEnter, rExit }) {
+  const W = 600, H = 200, PAD_L = 36, PAD_R = 12, PAD_T = 18, PAD_B = 28;
+  const totalDist = cumDist[cumDist.length - 1];
+  const xScale = d => PAD_L + (d / totalDist) * (W - PAD_L - PAD_R);
+  const yScale = r => PAD_T + (1 - r) * (H - PAD_T - PAD_B);
+  const cur = cumDist[currentIdx];
+
+  // Only draw curve up to currentIdx so it grows as playback progresses.
+  function pathUpTo(values) {
+    let d = "";
+    let started = false;
+    for (let i = 0; i <= currentIdx; i++) {
+      if (isNaN(values[i])) {
+        started = false;
+        continue;
+      }
+      const x = xScale(cumDist[i]);
+      const y = yScale(values[i]);
+      d += (started ? "L" : "M") + x.toFixed(1) + " " + y.toFixed(1) + " ";
+      started = true;
+    }
+    return d;
+  }
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block" }}>
+      {/* y-axis ticks at 0.0, 0.5, 1.0 */}
+      {[0, 0.5, 1].map(r => (
+        <g key={r}>
+          <line x1={PAD_L} x2={W - PAD_R} y1={yScale(r)} y2={yScale(r)} stroke="#eef2ef" strokeWidth="1" />
+          <text x={PAD_L - 8} y={yScale(r) + 4} fontSize="11" fill={COLORS.threshold} textAnchor="end">{r.toFixed(1)}</text>
+        </g>
+      ))}
+      {/* threshold lines */}
+      <line x1={PAD_L} x2={W - PAD_R} y1={yScale(rEnter)} y2={yScale(rEnter)} stroke={COLORS.threshold} strokeDasharray="4 4" strokeWidth="1" />
+      <text x={W - PAD_R - 4} y={yScale(rEnter) - 4} fontSize="10" fill={COLORS.threshold} textAnchor="end">R_enter {rEnter}</text>
+      <line x1={PAD_L} x2={W - PAD_R} y1={yScale(rExit)} y2={yScale(rExit)} stroke={COLORS.threshold} strokeDasharray="4 4" strokeWidth="1" />
+      <text x={W - PAD_R - 4} y={yScale(rExit) - 4} fontSize="10" fill={COLORS.threshold} textAnchor="end">R_exit {rExit}</text>
+      {/* R curves so far */}
+      <path d={pathUpTo(rLong)} fill="none" stroke={COLORS.rLong} strokeWidth="2" />
+      <path d={pathUpTo(rShort)} fill="none" stroke={COLORS.rShort} strokeWidth="2" />
+      {/* Entries (state → direction-changing — i.e. trajkit "splits") */}
+      {entries.filter(s => s <= cur).map((s, i) => (
+        <line key={`e${i}`} x1={xScale(s)} x2={xScale(s)} y1={PAD_T} y2={H - PAD_B} stroke={COLORS.entry} strokeWidth="1.5" />
+      ))}
+      {/* Exits (state → going-straight — surfaced for transparency, not used as a split by trajkit) */}
+      {exits.filter(s => s <= cur).map((s, i) => (
+        <line key={`x${i}`} x1={xScale(s)} x2={xScale(s)} y1={PAD_T} y2={H - PAD_B} stroke={COLORS.exit} strokeWidth="1.5" strokeDasharray="3 3" />
+      ))}
+      {/* playback marker */}
+      <line x1={xScale(cur)} x2={xScale(cur)} y1={PAD_T} y2={H - PAD_B} stroke={COLORS.marker} strokeWidth="1.5" />
+      <text x={PAD_L} y={H - 8} fontSize="11" fill={COLORS.threshold}>distance (m) →</text>
+      <text x={xScale(cur) + 4} y={PAD_T + 10} fontSize="10" fill={COLORS.marker}>{cur.toFixed(0)}m</text>
+    </svg>
+  );
+}
+
+// ── Main demo component ─────────────────────────────────────────────
+
+function Demo() {
+  const [presetKey, setPresetKey] = useState("rightAngle");
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentIdx, setCurrentIdx] = useState(0);
+  const [speed, setSpeed] = useState(1.5);
+  const rafRef = useRef(null);
+  const lastFrameRef = useRef(null);
+
+  const points = useMemo(() => PRESETS[presetKey].make(), [presetKey]);
+  const { cumDist, bearings, rShort, rLong } = useMemo(() => {
+    const cumDist = computeCumDist(points);
+    const bearings = computeBearings(points);
+    const rShort = precomputeR(cumDist, bearings, PARAMS.shortM);
+    const rLong = precomputeR(cumDist, bearings, PARAMS.longM);
+    return { cumDist, bearings, rShort, rLong };
+  }, [points]);
+
+  const { states, entries, exits } = useMemo(
+    () => computeStateAndSplits(cumDist, rShort, rLong, PARAMS.rEnter, PARAMS.rExit, PARAMS.sustainM),
+    [cumDist, rShort, rLong]
+  );
+
+  // Segment IDs (0-indexed): number of entries that have occurred at or before
+  // each point's cumulative distance. Segment 0 = start of trace through first
+  // entry; segment 1 = first entry through second entry; etc.
+  const segmentIds = useMemo(() => {
+    return cumDist.map(d => {
+      let n = 0;
+      for (const e of entries) {
+        if (e <= d) n++;
+        else break;
+      }
+      return n;
+    });
+  }, [cumDist, entries]);
+  const totalSegments = (segmentIds[segmentIds.length - 1] ?? 0) + 1;
+
+  // Animation loop
+  useEffect(() => {
+    if (!isPlaying) return undefined;
+    // Cap per-second pace so longer paths don't whip through; short paths still
+    // get the natural "cross in ~8 s at 1×" feel.
+    const totalDist = cumDist[cumDist.length - 1];
+    const stepPerSec = Math.min(totalDist / 8, 120) * speed;
+    lastFrameRef.current = null;
+    const tick = ts => {
+      if (lastFrameRef.current == null) lastFrameRef.current = ts;
+      const dt = (ts - lastFrameRef.current) / 1000;
+      lastFrameRef.current = ts;
+      setCurrentIdx(prev => {
+        const targetDist = cumDist[prev] + stepPerSec * dt;
+        let next = prev;
+        while (next < cumDist.length - 1 && cumDist[next] < targetDist) next++;
+        if (next >= cumDist.length - 1) {
+          setIsPlaying(false);
+          return cumDist.length - 1;
+        }
+        return next;
+      });
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, [isPlaying, speed, cumDist]);
+
+  const reset = () => { setIsPlaying(false); setCurrentIdx(0); };
+  const togglePlay = () => {
+    if (currentIdx >= cumDist.length - 1) setCurrentIdx(0);
+    setIsPlaying(p => !p);
+  };
+
+  const entryCount = entries.filter(s => s <= cumDist[currentIdx]).length;
+  const exitCount = exits.filter(s => s <= cumDist[currentIdx]).length;
+  const rShortNow = rShort[currentIdx];
+  const rLongNow = rLong[currentIdx];
+  const stateNow = currentIdx > 0 ? states[currentIdx] : false;
+
+  return (
+    <div>
+      <div className="controls">
+        <button className="primary" onClick={togglePlay}>
+          {isPlaying ? "Pause" : currentIdx >= cumDist.length - 1 ? "Replay" : "Play"}
+        </button>
+        <button onClick={reset}>Reset</button>
+        <label>
+          Path:
+          <select value={presetKey} onChange={e => { setPresetKey(e.target.value); reset(); }}>
+            {Object.entries(PRESETS).map(([key, p]) => (
+              <option key={key} value={key}>{p.label}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Speed:
+          <input type="range" min="0.3" max="3" step="0.1" value={speed} onChange={e => setSpeed(+e.target.value)} />
+          <span style={{ fontFamily: "monospace", fontSize: 12 }}>{speed.toFixed(1)}×</span>
+        </label>
+      </div>
+
+      <p className="help">{PRESETS[presetKey].hint}</p>
+
+      <div className="canvas-wrap">
+        <PathCanvas
+          points={points}
+          currentIdx={currentIdx}
+          segmentIds={segmentIds}
+          states={states}
+          entries={entries}
+          exits={exits}
+          cumDist={cumDist}
+          windowM={PARAMS.shortM}
+        />
+        <StateStrip cumDist={cumDist} states={states} currentIdx={currentIdx} entries={entries} exits={exits} />
+        <div className="legend">
+          {[...Array(Math.min(totalSegments, 4))].map((_, i) => (
+            <span key={`seg${i}`}>
+              <span className="legend-dot" style={{ background: SEGMENT_PALETTE[i % SEGMENT_PALETTE.length] }} /> segment {i + 1}
+            </span>
+          ))}
+          <span><span className="legend-dot" style={{ background: COLORS.windowStroke }} /> 75 m window</span>
+          <span><span className="legend-dot" style={{ background: COLORS.entry }} /> entry (new segment)</span>
+          <span><span className="legend-dot" style={{ background: COLORS.exit }} /> exit (state only)</span>
+          <span><span className="legend-dot" style={{ background: COLORS.stateTurning }} /> state: direction changing</span>
+        </div>
+      </div>
+
+      <div className="canvas-wrap">
+        <RCurveCanvas
+          cumDist={cumDist}
+          rShort={rShort}
+          rLong={rLong}
+          currentIdx={currentIdx}
+          entries={entries}
+          exits={exits}
+          rEnter={PARAMS.rEnter}
+          rExit={PARAMS.rExit}
+        />
+        <div className="legend">
+          <span><span className="legend-dot" style={{ background: COLORS.rShort }} /> R (75 m)</span>
+          <span><span className="legend-dot" style={{ background: COLORS.rLong }} /> R (200 m)</span>
+          <span><span className="legend-dot" style={{ background: COLORS.entry }} /> entry</span>
+          <span><span className="legend-dot" style={{ background: COLORS.exit }} /> exit</span>
+        </div>
+      </div>
+
+      <div className="readouts">
+        <span>distance <strong>{cumDist[currentIdx].toFixed(0)} m</strong></span>
+        <span>R (75 m) <strong>{isNaN(rShortNow) ? "—" : rShortNow.toFixed(2)}</strong></span>
+        <span>R (200 m) <strong>{isNaN(rLongNow) ? "—" : rLongNow.toFixed(2)}</strong></span>
+        <span>state <strong style={{ color: stateNow ? "#b87333" : COLORS.threshold }}>{stateNow ? "direction changing" : "going straight"}</strong></span>
+        <span>segment <strong style={{ color: SEGMENT_PALETTE[segmentIds[currentIdx] % SEGMENT_PALETTE.length] }}>{(segmentIds[currentIdx] ?? 0) + 1}</strong> of <strong>{totalSegments}</strong></span>
+        <span>entries / exits <strong>{entryCount} / {exitCount}</strong></span>
+      </div>
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<Demo />);
+  </script>
+</body>
+</html>

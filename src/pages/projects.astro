@@ -1,0 +1,154 @@
+---
+import Layout from "@/layouts/Layout.astro";
+import Header from "@/components/Header.astro";
+import Breadcrumb from "@/components/Breadcrumb.astro";
+import Main from "@/components/Main.astro";
+import Footer from "@/components/Footer.astro";
+import config from "@/config";
+
+type Project = {
+  title: string;
+  summary: string;
+  status?: "shipped" | "in-progress" | "archived";
+  tags?: string[];
+  links: { label: string; href: string }[];
+  note?: string;
+};
+
+// Edit this list to add or update projects.
+const projects: Project[] = [
+  {
+    title: "trajkit",
+    summary:
+      "End-to-end pipeline for turning noisy GPS pings into typed trajectory chunks at segment, episode, and embedding-vector grain. The chunking uses a multi-scale circular-statistics bearing detector (R over 75 m + 200 m distance windows, Schmitt-trigger hysteresis) for sustained-direction-change splits, plus spatial-envelope STAY / TRANSIT detection with endpoint-aware containment. Validated end-to-end on Microsoft Geolife.",
+    status: "shipped",
+    tags: ["python", "pandas", "faiss", "trajectory", "gps"],
+    links: [
+      { label: "GitHub", href: "https://github.com/darmaaz/trajkit" },
+      {
+        label: "Writeup",
+        href: "/posts/trajkit-searchable-chunks-from-noisy-gps/",
+      },
+      {
+        label: "Notebook",
+        href: "https://nbviewer.org/github/darmaaz/trajkit/blob/main/examples/geolife/explore.ipynb",
+      },
+    ],
+  },
+  {
+    title: "gps-trajectory-reconstruction",
+    summary:
+      "Sister project to trajkit at finer grain. Probabilistic map-matched route reconstruction from sparse GPS, with a CRF over candidate paths, per-edge marginals derived from the posterior, and time-budget-derived dwell distributions. Measured on Porto taxi data downsampled from 15-second to 120-second cadence: 96.3% capacity on transitions where the route is structurally recoverable from sparse input, with rank-calibrated edge marginals through the operationally informative range.",
+    status: "shipped",
+    tags: ["python", "map-matching", "gps", "crf", "probabilistic"],
+    links: [
+      { label: "GitHub", href: "https://github.com/darmaaz/gps-trajectory-reconstruction" },
+      {
+        label: "Writeup",
+        href: "/posts/gps-reconstruction-probabilistic-sparse-cadence/",
+      },
+    ],
+  },
+  {
+    title: "diecut studio",
+    summary:
+      "ML-powered SaaS for extracting individual stickers from sheet images. Two-phase pipeline (Grounding DINO detection → SAM 2 segmentation → Real-ESRGAN polish) with an interactive box editor between phases. Next.js + FastAPI + Modal serverless GPUs + Supabase + Clerk auth + Stripe credits. The upscaling step routes by perceptual sharpness — small-and-sharp inputs Lanczos-resize, small-and-blurry inputs ESRGAN-recover — so output quality is consistent across input quality.",
+    status: "shipped",
+    tags: ["nextjs", "fastapi", "modal", "sam2", "ml", "saas"],
+    links: [
+      { label: "Live demo", href: "https://diecut-studio.vercel.app" },
+      // Add the GitHub link if the repo goes public:
+      // { label: "GitHub", href: "https://github.com/darmaaz/sticker-processor" },
+    ],
+    note: "Demo is capped at 5 trial credits per visitor; the GPU backend cold-starts (~30s) after a week of inactivity.",
+  },
+  {
+    title: "the lexicon",
+    summary:
+      "Spaced-repetition vocabulary app for GRE prep. Each word gets an AI-generated short story (Vercel AI Gateway) that puts the meaning in narrative context rather than a single example sentence, plus a cached generated image. Scheduling uses ts-fsrs (the algorithm modern Anki ships). Next.js 16 RSC + Server Actions, Clerk auth, Neon Postgres + Drizzle ORM, Vercel Blob for image caching. 315-word seeded GRE base set with per-user progress.",
+    status: "shipped",
+    tags: ["nextjs", "ai-sdk", "spaced-repetition", "postgres", "drizzle"],
+    links: [
+      { label: "Live", href: "https://thelexicon.vercel.app" },
+      // Add the GitHub link if the repo goes public:
+      // { label: "GitHub", href: "https://github.com/darmaaz/the-lexicon" },
+    ],
+  },
+];
+
+const statusBadge = {
+  shipped: { label: "shipped", colour: "bg-green-500/10 text-green-700 dark:text-green-400" },
+  "in-progress": { label: "in progress", colour: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400" },
+  archived: { label: "archived", colour: "bg-gray-500/10 text-gray-600 dark:text-gray-400" },
+} as const;
+---
+
+<Layout
+  title={`Projects | ${config.site.title}`}
+  description="Projects by darmaaz — trajectory analysis, GPS reconstruction, and related work."
+>
+  <Header />
+
+  <Breadcrumb />
+
+  <Main pageTitle="Projects" pageDesc="What I've been building recently.">
+    <ul class="not-prose grid gap-6 sm:gap-8">
+      {
+        projects.map(p => (
+          <li class="border-border bg-background hover:border-accent rounded-lg border p-5 transition-colors sm:p-6">
+            <div class="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <h2 class="text-foreground text-2xl font-bold">{p.title}</h2>
+              {p.status && (
+                <span
+                  class:list={[
+                    "rounded-full px-2 py-0.5 text-xs font-medium",
+                    statusBadge[p.status].colour,
+                  ]}
+                >
+                  {statusBadge[p.status].label}
+                </span>
+              )}
+            </div>
+
+            <p class="text-foreground/80 mb-4 leading-relaxed">{p.summary}</p>
+
+            {p.note && (
+              <p class="text-foreground/60 mb-4 text-sm italic">{p.note}</p>
+            )}
+
+            {p.tags && p.tags.length > 0 && (
+              <div class="mb-4 flex flex-wrap gap-2">
+                {p.tags.map(tag => (
+                  <span class="bg-muted/40 text-foreground/70 rounded px-2 py-0.5 text-xs">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {p.links.length > 0 && (
+              <div class="flex flex-wrap gap-x-4 gap-y-2 text-sm">
+                {p.links.map(link => (
+                  <a
+                    href={link.href}
+                    class="text-accent hover:underline"
+                    target={link.href.startsWith("http") ? "_blank" : undefined}
+                    rel={
+                      link.href.startsWith("http")
+                        ? "noopener noreferrer"
+                        : undefined
+                    }
+                  >
+                    {link.label} →
+                  </a>
+                ))}
+              </div>
+            )}
+          </li>
+        ))
+      }
+    </ul>
+  </Main>
+
+  <Footer />
+</Layout>

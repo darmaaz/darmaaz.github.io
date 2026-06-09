@@ -10,25 +10,25 @@
   --font-app: var(--font-google-sans-code);
 }
 
-/* Light theme values */
+/* Light theme — Jadeite (teal-accented light scheme) */
 :root,
 [data-theme="light"] {
-  --background: #fdfdfd;
-  --foreground: #282728;
-  --accent: #006cac;
+  --background: #f6fcf7;
+  --foreground: #060b07;
+  --accent: #027c6d;
   --accent-foreground: #ffffff;
-  --muted: #e6e6e6;
+  --muted: #c9e4e2;
   --muted-foreground: #6b7280;
-  --border: #ece9e9;
+  --border: #d4e1df;
 }
 
-/* Dark theme values */
+/* Dark theme — paired with Jadeite (teal accent on a deep neutral) */
 [data-theme="dark"] {
-  --background: #212737;
-  --foreground: #eaedf3;
-  --accent: #ff6b01;
-  --accent-foreground: #ffffff;
-  --muted: #343f60;
-  --muted-foreground: #afb9ca;
-  --border: #ab4b08;
+  --background: #0f1714;
+  --foreground: #eef3ef;
+  --accent: #2ec4b6;
+  --accent-foreground: #0f1714;
+  --muted: #1d2926;
+  --muted-foreground: #9ab0aa;
+  --border: #2a3b35;
 }

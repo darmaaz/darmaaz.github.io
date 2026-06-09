@@ -1,166 +1,124 @@
-# AstroPaper 📄
+# darmaaz.github.io
 
-![AstroPaper](public/default-og.jpg)
-[![Figma](https://img.shields.io/badge/Figma-F24E1E?style=for-the-badge&logo=figma&logoColor=white)](https://www.figma.com/community/file/1356898632249991861)
-![Typescript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)
-![GitHub](https://img.shields.io/github/license/satnaing/astro-paper?color=%232F3741&style=for-the-badge)
-[![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-%23FE5196?logo=conventionalcommits&logoColor=white&style=for-the-badge)](https://conventionalcommits.org)
-[![Commitizen friendly](https://img.shields.io/badge/commitizen-friendly-brightgreen.svg?style=for-the-badge)](http://commitizen.github.io/cz-cli/)
+Personal site. Built on [AstroPaper](https://github.com/satnaing/astro-paper).
 
-AstroPaper is a minimal, responsive, accessible and SEO-friendly Astro blog theme. This theme is designed and crafted based on [my personal blog](https://satnaing.dev/blog).
-
-Read [the blog posts](https://astro-paper.pages.dev/posts/) or check [the README Documentation Section](#-documentation) for more info.
-
-## 🔥 Features
-
-- [x] type-safe markdown
-- [x] super fast performance
-- [x] accessible (Keyboard/VoiceOver)
-- [x] responsive (mobile ~ desktops)
-- [x] SEO-friendly
-- [x] light & dark mode
-- [x] static search ([Pagefind](https://pagefind.app/))
-- [x] draft posts & pagination
-- [x] sitemap & rss feed
-- [x] MDX support
-- [x] collapsible table of contents
-- [x] followed best practices
-- [x] highly customizable
-- [x] dynamic OG image generation for blog posts ([Blog Post](https://astro-paper.pages.dev/posts/dynamic-og-image-generation-in-astropaper-blog-posts/))
-- [x] i18n ready
-
-_Note: I've tested screen-reader accessibility of AstroPaper using **VoiceOver** on Mac and **TalkBack** on Android. I couldn't test all other screen-readers out there. However, accessibility enhancements in AstroPaper should be working fine on others as well._
-
-## ✅ Lighthouse Score
-
-<p align="center">
-  <a href="https://pagespeed.web.dev/report?url=https%3A%2F%2Fastro-paper.pages.dev%2F&form_factor=desktop">
-    <img width="710" alt="AstroPaper Lighthouse Score" src="AstroPaper-lighthouse-score.svg">
-  </a>
-</p>
-
-## 🚀 Project Structure
-
-Inside of AstroPaper, you'll see the following folders and files:
+## Local development
 
 ```bash
-/
-├── public/
-│   ├── pagefind/          # auto-generated on build
-│   ├── favicon.svg
-│   └── default-og.jpg
-├── src/
-│   ├── assets/
-│   │   ├── icons/
-│   │   └── images/
-│   ├── components/
-│   ├── content/
-│   │   ├── pages/
-│   │   │   └── about.md
-│   │   └── posts/
-│   │       └── some-blog-posts.md
-│   ├── i18n/
-│   ├── layouts/
-│   ├── pages/
-│   ├── scripts/
-│   ├── styles/
-│   ├── types/
-│   ├── utils/
-│   ├── config.ts
-│   └── content.config.ts
-├── astro-paper.config.ts  # user-defined configurations
-└── astro.config.ts
+npm install        # only the first time
+npm run dev        # local server at http://localhost:4321
 ```
 
-All blog posts are stored in the `src/content/posts/` directory. You can organise posts into subdirectories — the subdirectory name becomes part of the post URL.
+## Adding a new post
 
-## 📖 Documentation
+1. Create a new `.md` (or `.mdx`) file in `src/content/posts/`. The filename becomes the URL slug.
+2. Add frontmatter at the top:
 
-Documentation can be read in two formats\_ _markdown_ & _blog post_.
+   ```yaml
+   ---
+   title: "Post title"
+   description: "One-sentence summary used in cards and og-image."
+   pubDatetime: 2026-06-04T00:00:00Z
+   featured: false          # set to true to pin to the homepage hero
+   tags:
+     - tag-one
+     - tag-two
+   ---
+   ```
 
-- Configuration - [markdown](src/content/posts/how-to-configure-astropaper-theme.md) | [blog post](https://astro-paper.pages.dev/posts/how-to-configure-astropaper-theme/)
-- Add Posts - [markdown](src/content/posts/adding-new-post.md) | [blog post](https://astro-paper.pages.dev/posts/adding-new-posts-in-astropaper-theme/)
-- Customize Color Schemes - [markdown](src/content/posts/customizing-astropaper-theme-color-schemes.md) | [blog post](https://astro-paper.pages.dev/posts/customizing-astropaper-theme-color-schemes/)
-- Predefined Color Schemes - [markdown](src/content/posts/predefined-color-schemes.md) | [blog post](https://astro-paper.pages.dev/posts/predefined-color-schemes/)
+3. Write the body in markdown below the frontmatter. Code fences, links, images, and most extensions work out of the box.
+4. The post appears at `/posts/<filename-without-extension>/` and in the posts archive and tag pages.
 
-## 💻 Tech Stack
+## Adding a new project
 
-**Main Framework** - [Astro](https://astro.build/)  
-**Type Checking** - [TypeScript](https://www.typescriptlang.org/)  
-**Styling** - [TailwindCSS](https://tailwindcss.com/)  
-**UI/UX** - [Figma Design File](https://www.figma.com/community/file/1356898632249991861)  
-**Static Search** - [Pagefind](https://pagefind.app/)  
-**Icons** - [Tablers](https://tabler-icons.io/)  
-**Code Formatting** - [Prettier](https://prettier.io/)  
-**Deployment** - [Cloudflare Pages](https://pages.cloudflare.com/)  
-**Linting** - [ESLint](https://eslint.org)  
-**Dynamic OG images** - [Satori](https://github.com/vercel/satori) + [Sharp](https://sharp.pixelplumbing.com/) + [Astro Fonts](https://docs.astro.build/en/guides/fonts/)
+Edit the `projects` array at the top of `src/pages/projects.astro`. Each entry is a typed object:
 
-## 👨🏻‍💻 Running Locally
+```ts
+{
+  title: "project name",
+  summary: "One paragraph. What the project is, what's interesting about it.",
+  status: "shipped" | "in-progress" | "archived",
+  tags: ["python", "gps"],
+  links: [
+    { label: "GitHub", href: "https://github.com/darmaaz/..." },
+    { label: "Writeup", href: "/posts/<slug>/" },
+  ],
+}
+```
 
-You can start using this project locally by running the following command in your desired directory:
+The page renders cards in array order, so put the strongest project first.
+
+## Editing site identity
+
+- **Title, description, author, URL, timezone:** `astro-paper.config.ts` at the project root.
+- **Homepage hero copy:** `src/pages/index.astro` (search for the `<section id="hero">` block).
+- **About page body:** `src/content/pages/about.md`.
+- **Nav menu items:** `src/components/Header.astro` (the `<ul id="menu-items">` block).
+- **Social links:** `socials` array in `astro-paper.config.ts`.
+
+## Deploying to GitHub Pages
+
+1. Create a public repo on GitHub named exactly `darmaaz.github.io`.
+
+2. Initialize this directory as a git repo and push:
+
+   ```bash
+   git init
+   git add .
+   git commit -m "Initial commit"
+   git branch -M main
+   git remote add origin git@github.com:darmaaz/darmaaz.github.io.git
+   git push -u origin main
+   ```
+
+3. In the repo's GitHub settings, go to **Pages** → **Build and deployment** → set **Source** to **GitHub Actions**.
+
+4. Add a workflow file at `.github/workflows/deploy.yml`:
+
+   ```yaml
+   name: Deploy site
+   on:
+     push:
+       branches: [main]
+   permissions:
+     contents: read
+     pages: write
+     id-token: write
+   jobs:
+     build:
+       runs-on: ubuntu-latest
+       steps:
+         - uses: actions/checkout@v4
+         - uses: actions/setup-node@v4
+           with: { node-version: 20 }
+         - run: npm ci
+         - run: npm run build
+         - uses: actions/upload-pages-artifact@v3
+           with: { path: ./dist }
+     deploy:
+       needs: build
+       runs-on: ubuntu-latest
+       environment:
+         name: github-pages
+         url: ${{ steps.deploy.outputs.page_url }}
+       steps:
+         - id: deploy
+           uses: actions/deploy-pages@v4
+   ```
+
+5. Push that file. The workflow runs on every push to `main`; the site is live at `https://darmaaz.github.io/` within a minute or two.
+
+## Production build (manual check)
 
 ```bash
-# pnpm
-pnpm create astro@latest --template satnaing/astro-paper
-
-# npm
-npm create astro@latest -- --template satnaing/astro-paper
-
-# yarn
-yarn create astro --template satnaing/astro-paper
-
-# bun
-bun create astro@latest -- --template satnaing/astro-paper
+npm run build       # outputs to ./dist
+npm run preview     # serves the production build at http://localhost:4321
 ```
 
-Then start the project by running the following commands:
+Useful for catching frontmatter-validation or build errors before deploy.
 
-```bash
-# install dependencies if you haven't done so in the previous step.
-pnpm install
+## Notes
 
-# start running the project
-pnpm dev
-```
-
-## Google Site Verification (optional)
-
-You can add your [Google Site Verification HTML tag](https://support.google.com/webmasters/answer/9008080#meta_tag_verification&zippy=%2Chtml-tag) by setting `site.googleVerification` in `astro-paper.config.ts`:
-
-```ts file="astro-paper.config.ts"
-export default defineAstroPaperConfig({
-  site: {
-    // ...
-    googleVerification: "your-google-site-verification-value",
-  },
-  // ...
-});
-```
-
-> See [this discussion](https://github.com/satnaing/astro-paper/discussions/334#discussioncomment-10139247) for adding AstroPaper to the Google Search Console.
-
-## 🧞 Commands
-
-All commands are run from the root of the project, from a terminal:
-
-| Command          | Action                                                                                                                           |
-| :--------------- | :------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm install`   | Installs dependencies                                                                                                            |
-| `pnpm dev`       | Starts local dev server at `localhost:4321`                                                                                      |
-| `pnpm build`     | Type-checks, builds the site, runs Pagefind indexing, and copies the index to `public/pagefind/`                                 |
-| `pnpm preview`   | Preview your build locally, before deploying                                                                                     |
-| `pnpm sync`      | Generates TypeScript types for all Astro modules. [Learn more](https://docs.astro.build/en/reference/cli-reference/#astro-sync). |
-| `pnpm astro ...` | Run CLI commands like `astro add`, `astro check`                                                                                 |
-
-## ✨ Feedback & Suggestions
-
-If you have any suggestions/feedback, you can contact me via [my email](mailto:satnaingdev+astropaper@gmail.com). Alternatively, feel free to open an issue if you find bugs or want to request new features.
-
-## 📜 License
-
-Licensed under the MIT License, Copyright © 2026
-
----
-
-Made with 🤍 by [Sat Naing](https://satnaing.dev) 👨🏻‍💻 and [contributors](https://github.com/satnaing/astro-paper/graphs/contributors).
+- AstroPaper's docs live in the [original repo's README](https://github.com/satnaing/astro-paper) and posts (the four `_*` directories under `src/content/posts/` keep some templates / examples and are skipped by the content loader).
+- Search is built locally via [PageFind](https://pagefind.app/) — it runs automatically as part of `npm run build`.
+- The `editPost` feature in `astro-paper.config.ts` is currently disabled. Enable it and point the URL at this repo if you want an "edit on GitHub" link on each post.
