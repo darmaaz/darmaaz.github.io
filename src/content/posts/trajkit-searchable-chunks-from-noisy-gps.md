@@ -67,8 +67,8 @@ The result is a detector that fires on sustained, meaningful direction changes �
 
 *The cut, on a real corner. The same trajectory coloured by how steady the heading is — blue along each leg, orange at the bend. The detector splits exactly where the heading turns: no stop, no gap, just a sustained change of direction.*
 
-<details>
-<summary><strong>Try it yourself</strong> — slide a window along ten sample paths and watch R update, splits fire, and segments form</summary>
+<details style="display:block;width:100%;margin:1.75rem 0;padding:0.85rem 1.1rem;border:1px solid var(--border);border-left:4px solid var(--accent);border-radius:0.5rem;background:color-mix(in srgb, var(--muted) 35%, transparent);">
+<summary style="font-size:1.05em;"><strong style="color:var(--accent);">Try it yourself</strong> — slide a window along ten sample paths and watch R update, splits fire, and segments form <em style="opacity:0.75;">(interactive demo)</em></summary>
 <iframe id="bearing-demo" src="/demos/bearing/index.html" loading="lazy" title="Bearing detector playground" style="border:0;width:100%;height:600px;margin-top:12px;display:block;background:transparent;"></iframe>
 </details>
 <script>
